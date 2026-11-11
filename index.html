@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laporan Hasil Pertandingan TGR</title>
+    
+    <!-- Google Fonts & FontAwesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+    <style>
+        :root {
+            --blue-color: #007bff;
+            --red-color: #dc3545;
+            --gold-color: #ffc107;
+            --text-dark: #333;
+            --bg-color: #f4f7f6;
+            --border-color: #dee2e6;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-dark); padding: 20px; }
+
+        .container { max-width: 1000px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 30px; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .header h1 { font-size: 24px; font-weight: 800; text-transform: uppercase; color: #2c3e50; }
+        .header p { color: #666; font-size: 14px; }
+
+        #loading, #empty-state { text-align: center; font-size: 18px; font-weight: 600; color: #666; margin-top: 50px; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+
+        /* Match Card & Table */
+        .match-card { background: white; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); margin-bottom: 30px; overflow: hidden; }
+        .match-title { background: #2c3e50; color: white; padding: 15px 20px; font-size: 18px; font-weight: 700; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
+        .table-responsive { overflow-x: auto; width: 100%; }
+        table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+        th, td { padding: 12px 15px; border: 1px solid var(--border-color); text-align: center; font-size: 14px; }
+        tbody tr:nth-child(even) { background-color: #f8f9fa; }
+        tbody td:first-child { text-align: left; font-weight: 600; background-color: #f1f3f5; color: #495057; width: 30%; }
+        thead th.col-desc { background: #e9ecef; color: #495057; }
+        thead th.col-blue { background: var(--blue-color); color: white; width: 35%; }
+        thead th.col-red { background: var(--red-color); color: white; width: 35%; }
+
+        .text-blue { color: var(--blue-color); font-weight: 700; font-size: 16px; }
+        .text-red { color: var(--red-color); font-weight: 700; font-size: 16px; }
+        .cont-text { font-size: 12px; color: #666; font-weight: 500; }
+        .winner-cell { background-color: var(--gold-color) !important; color: black !important; font-weight: 800 !important; font-size: 18px; box-shadow: inset 0 0 10px rgba(0,0,0,0.1); }
+        .mono-num { font-family: 'Share Tech Mono', monospace; font-size: 15px; font-weight: bold; }
+        .score-final { font-size: 20px; font-weight: 800; }
+
+        /* Floating Action Buttons */
+        .fab-container { position: fixed; bottom: 30px; right: 30px; display: flex; flex-direction: column; gap: 15px; z-index: 1000; }
+        .fab-btn { background-color: #2c3e50; color: white; border: none; border-radius: 50px; padding: 15px 25px; font-size: 15px; font-weight: 600; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.25); display: flex; align-items: center; gap: 10px; transition: all 0.3s ease; }
+        .fab-btn:hover { background-color: #1a252f; transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+        .fab-btn.btn-print { background-color: #28a745; }
+        .fab-btn.btn-print:hover { background-color: #218838; }
+        .fab-btn.btn-folder { background-color: #ff9800; color: #fff; }
+        .fab-btn.btn-folder:hover { background-color: #e68a00; }
+
+        /* MODAL POPUP */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
+        .modal-content { background: white; border-radius: 12px; width: 95%; max-width: 900px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,0.4); overflow: hidden; animation: popIn 0.3s ease-out forwards; }
+        @keyframes popIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        
+        .modal-header { padding: 20px; background: #2c3e50; color: white; display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h2 { font-size: 20px; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 10px;}
+        .close-btn { font-size: 24px; cursor: pointer; color: white; transition: 0.3s; }
+        .close-btn:hover { color: var(--red-color); transform: scale(1.1); }
+        .modal-body { padding: 20px; overflow-y: auto; }
+        .modal-actions { display: flex; justify-content: space-between; margin-bottom: 20px; gap: 10px;}
+        
+        .btn { padding: 10px 18px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; color: white; transition: 0.2s;}
+        .btn:hover { filter: brightness(0.9); }
+        .btn-blue { background: var(--blue-color); }
+        .btn-red { background: var(--red-color); }
+        .btn-green { background: #28a745; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 6px; }
+
+        .history-table th { background: #e9ecef; color: #333; text-align: center; }
+        .history-table td { text-align: center; vertical-align: middle; }
+        .history-table td:first-child { background: transparent; width: auto; font-weight: normal; }
+
+        /* Mobile View Adjustments */
+        @media (max-width: 600px) {
+            .header h1 { font-size: 20px; }
+            th, td { padding: 10px; font-size: 13px; }
+            .fab-btn { padding: 12px 20px; font-size: 14px; }
+            .fab-container { bottom: 20px; right: 20px; }
+        }
+
+        /* PRINT CSS - Menyembunyikan UI dan Menampilkan Tabel Rapih */
+        @media print {
+            .no-print, .fab-container, .modal-overlay, .modal-actions, .close-btn { display: none !important; }
+            body { background: white !important; margin: 0; padding: 0; }
+            .container { box-shadow: none !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+            .match-card { box-shadow: none !important; border: 2px solid #000 !important; margin-bottom: 20px !important; }
+            th, td { border: 1px solid #000 !important; }
+            .winner-cell { background-color: #ffc107 !important; -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
+            thead th.col-blue { background-color: #007bff !important; -webkit-print-color-adjust: exact !important; color: white !important;}
+            thead th.col-red { background-color: #dc3545 !important; -webkit-print-color-adjust: exact !important; color: white !important;}
+            
+            /* Logic Cetak Riwayat Popup Seluruhnya */
+            body.print-history-mode .container { display: none !important; }
+            body.print-history-mode .modal-overlay { display: block !important; position: static !important; background: white !important; }
+            body.print-history-mode .modal-content { box-shadow: none !important; border: none !important; width: 100% !important; max-height: none !important; }
+            body.print-history-mode .modal-header { color: black !important; background: white !important; border-bottom: 2px solid #000; padding: 0 0 10px 0; margin-bottom: 20px; }
+            
+            body:not(.print-history-mode) .modal-overlay { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header no-print">
+            <h1>Laporan Hasil Pertandingan TGR</h1>
+            <p>Kejuaraan Kota Pencak Silat IPSI Kota Ambon</p>
+        </div>
+
+        <div id="loading" class="no-print">Memuat data dari server...</div>
+        <div id="empty-state" class="no-print" style="display: none;">Tidak ada partai yang sedang berstatus "Fight" / Aktif.</div>
+        
+        <!-- Wadah Utama (Akan diisi Laporan Aktif, atau Laporan Spesifik saat Print PDF) -->
+        <div id="report-container"></div>
+    </div>
+
+    <!-- Floating Buttons (Hanya tampil di layar) -->
+    <div class="fab-container no-print">
+        <button class="fab-btn btn-print" onclick="printActiveMatch()">
+            <i class="fas fa-print"></i> Cetak Partai Aktif
+        </button>
+        <button class="fab-btn btn-folder" onclick="openHistoryModal()">
+            <i class="fas fa-folder-open"></i> Riwayat Tersimpan
+        </button>
+    </div>
+
+    <!-- Modal Popup Riwayat Folder -->
+    <div id="history-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-folder-open" style="color:#ffc107;"></i> Arsip Laporan Pertandingan</h2>
+                <i class="fas fa-times close-btn" onclick="closeHistoryModal()"></i>
+            </div>
+            <div class="modal-body">
+                <div class="modal-actions">
+                    <button class="btn btn-blue" onclick="printAllHistoryList()"><i class="fas fa-print"></i> Cetak Daftar Riwayat</button>
+                    <button class="btn btn-red" onclick="deleteAllHistory()"><i class="fas fa-trash-alt"></i> Hapus Semua Data</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Partai</th>
+                                <th>Kategori</th>
+                                <th>Peserta (Biru vs Merah)</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table-body">
+                            <!-- Data akan dimuat otomatis via Javascript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAaQLzv_-ILHZpin2z558OrecHtlW8P88c",
+            authDomain: "tgripsiambon.firebaseapp.com",
+            databaseURL: "https://tgripsiambon-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "tgripsiambon",
+            storageBucket: "tgripsiambon.firebasestorage.app",
+            messagingSenderId: "835345452490",
+            appId: "1:835345452490:web:7ea41998ee906fdde39333"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let globalMatchData = [];
+        let globalRekapData = [];
+        let activePartaiNumber = null;
+
+        // Listener Firebase
+        db.ref('activeMatch').on('value', (snapshot) => {
+            const val = snapshot.val();
+            activePartaiNumber = (val && val.partai) ? val.partai : null;
+            renderActiveMatchReport();
+        });
+        db.ref('matches').on('value', (snapshot) => {
+            const data = snapshot.val();
+            globalMatchData = data ? Object.keys(data).map(key => ({ partai: key, ...data[key] })) : [];
+            renderActiveMatchReport();
+            updateHistoryModal(); 
+        });
+        db.ref('rekap').on('value', (snapshot) => {
+            const data = snapshot.val();
+            globalRekapData = data ? Object.keys(data).map(key => ({id: key, ...data[key]})) : [];
+            renderActiveMatchReport();
+            updateHistoryModal();
+        });
+
+        // FUNGSI UTAMA: Menghasilkan Template HTML Laporan
+        function generateMatchReportHTML(match, isActiveLabel = false) {
+            let kat = match.kategori || '';
+            let gen = match.gender || match.jk || '';
+            let gol = match.golongan || match.kelas || match.usia || '';
+            let fullKategori = `${kat} ${gen} ${gol}`.toUpperCase().replace(/\s+/g, ' ').trim();
+
+            const recaps = globalRekapData.filter(r => r.partai == match.partai);
+            recaps.sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+            const rBiru = recaps.find(r => r.name === match.namaBiru) || {};
+            const rMerah = recaps.find(r => r.name === match.namaMerah) || {};
+
+            let finalBiru = parseFloat(match.blueScore !== undefined ? match.blueScore : (rBiru.final || 0));
+            let finalMerah = parseFloat(match.redScore !== undefined ? match.redScore : (rMerah.final || 0));
+            let waktuB = match.waktuBiru || rBiru.waktu || '00:00.00';
+            let waktuM = match.waktuMerah || rMerah.waktu || '00:00.00';
+            let stdevB = parseFloat(rBiru.stdev || 0).toFixed(6);
+            let stdevM = parseFloat(rMerah.stdev || 0).toFixed(6);
+
+            let winBiruClass = '', winMerahClass = '', textPemenangB = '-', textPemenangM = '-';
+            if(finalBiru > finalMerah) { winBiruClass = 'winner-cell'; textPemenangB = 'PEMENANG'; } 
+            else if (finalMerah > finalBiru) { winMerahClass = 'winner-cell'; textPemenangM = 'PEMENANG'; } 
+            else if (finalBiru === finalMerah && finalBiru !== 0) { textPemenangB = 'SERI'; textPemenangM = 'SERI'; }
+
+            let titleLabel = isActiveLabel ? `PARTAI ${match.partai} (SEDANG AKTIF)` : `LAPORAN PARTAI ${match.partai}`;
+
+            return `
+            <div class="match-card">
+                <div class="match-title">
+                    <span>${titleLabel}</span>
+                    <span>${fullKategori}</span>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="col-desc">PARAMETER PENILAIAN</th>
+                                <th class="col-blue">SUDUT BIRU</th>
+                                <th class="col-red">SUDUT MERAH</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>NAMA PESILAT</td>
+                                <td>
+                                    <div class="text-blue">${(match.namaBiru || '-').toUpperCase()}</div>
+                                    <div class="cont-text">${(match.kontBiru || '-').toUpperCase()}</div>
+                                </td>
+                                <td>
+                                    <div class="text-red">${(match.namaMerah || '-').toUpperCase()}</div>
+                                    <div class="cont-text">${(match.kontMerah || '-').toUpperCase()}</div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>WAKTU TAMPIL</td>
+                                <td class="mono-num">${waktuB}</td>
+                                <td class="mono-num">${waktuM}</td>
+                            </tr>
+                            <tr>
+                                <td>STANDAR DEVIASI</td>
+                                <td class="mono-num">${stdevB}</td>
+                                <td class="mono-num">${stdevM}</td>
+                            </tr>
+                            <tr>
+                                <td>NILAI AKHIR / FINAL SCORE</td>
+                                <td class="mono-num score-final text-blue">${finalBiru.toFixed(3)}</td>
+                                <td class="mono-num score-final text-red">${finalMerah.toFixed(3)}</td>
+                            </tr>
+                            <tr>
+                                <td>HASIL PERTANDINGAN</td>
+                                <td class="${winBiruClass}">${textPemenangB}</td>
+                                <td class="${winMerahClass}">${textPemenangM}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            `;
+        }
+
+        // RENDER: Laporan Partai Aktif (Tampilan Utama)
+        function renderActiveMatchReport() {
+            const container = document.getElementById('report-container');
+            const emptyState = document.getElementById('empty-state');
+            document.getElementById('loading').style.display = 'none';
+
+            if (!activePartaiNumber) {
+                container.innerHTML = '';
+                emptyState.style.display = 'block';
+                return;
+            }
+
+            const match = globalMatchData.find(m => m.partai == activePartaiNumber);
+            if (!match) {
+                container.innerHTML = '';
+                emptyState.style.display = 'block';
+                return;
+            }
+
+            emptyState.style.display = 'none';
+            container.innerHTML = generateMatchReportHTML(match, true);
+        }
+
+        // RENDER: Tabel Riwayat di dalam Popup
+        function updateHistoryModal() {
+            const tbody = document.getElementById('history-table-body');
+            tbody.innerHTML = '';
+
+            let finishedMatches = globalMatchData.filter(m => 
+                (m.blueScore !== undefined && m.redScore !== undefined) || 
+                (m.blueStatus === 'finish' && m.redStatus === 'finish')
+            );
+            
+            finishedMatches.sort((a, b) => parseInt(a.partai) - parseInt(b.partai));
+
+            if (finishedMatches.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px;">Belum ada laporan pertandingan yang tersimpan.</td></tr>';
+                return;
+            }
+
+            finishedMatches.forEach((m, index) => {
+                let kat = m.kategori || '';
+                let gen = m.gender || m.jk || '';
+                let gol = m.golongan || m.kelas || m.usia || '';
+                let fullKategori = `${kat} ${gen} ${gol}`.toUpperCase().replace(/\s+/g, ' ').trim();
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td style="font-weight:bold; font-size:16px;">${m.partai}</td>
+                        <td>${fullKategori}</td>
+                        <td>
+                            <div style="color:var(--blue-color); font-weight:bold;">${(m.namaBiru || '-').toUpperCase()}</div>
+                            <div style="color:var(--red-color); font-weight:bold; margin-top:5px;">${(m.namaMerah || '-').toUpperCase()}</div>
+                        </td>
+                        <td>
+                            <!-- Tombol Cetak PDF Spesifik per Baris -->
+                            <button class="btn btn-green btn-sm" onclick="printSpecificMatch('${m.partai}')" style="margin: 0 auto;">
+                                <i class="fas fa-file-pdf"></i> Cetak Laporan
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        // LOGIC MODAL
+        function openHistoryModal() { document.getElementById('history-modal').style.display = 'flex'; }
+        function closeHistoryModal() { document.getElementById('history-modal').style.display = 'none'; }
+
+        // PRINT LOGIC: Cetak Laporan Partai Aktif (Main Screen)
+        function printActiveMatch() {
+            if(!activePartaiNumber) return alert("Tidak ada pertandingan aktif untuk dicetak.");
+            document.body.classList.remove('print-history-mode');
+            window.print();
+        }
+
+        // PRINT LOGIC: Cetak Daftar Seluruh Tabel Riwayat (Dari dalam Modal)
+        function printAllHistoryList() {
+            document.body.classList.add('print-history-mode');
+            window.print();
+        }
+
+        // PRINT LOGIC: Cetak Spesifik Laporan 1 Partai (Dari tombol di dalam tabel riwayat)
+        function printSpecificMatch(partaiNumber) {
+            closeHistoryModal(); // Sembunyikan modal
+            
+            const match = globalMatchData.find(m => m.partai == partaiNumber);
+            if(match) {
+                // Tembak HTML match spesifik ke container utama sementara
+                document.getElementById('report-container').innerHTML = generateMatchReportHTML(match, false);
+                document.getElementById('empty-state').style.display = 'none';
+                
+                document.body.classList.remove('print-history-mode');
+                
+                // Beri sedikit jeda agar DOM ter-render sebelum dialog print muncul
+                setTimeout(() => {
+                    window.print();
+                }, 200);
+            }
+        }
+        
+        // EVENT: Kembalikan tampilan ke Laporan Aktif setelah jendela Print ditutup
+        window.onafterprint = function() {
+            document.body.classList.remove('print-history-mode');
+            renderActiveMatchReport(); 
+        };
+
+        // FITUR HAPUS SEMUA DATA
+        function deleteAllHistory() {
+            if(confirm("PERINGATAN: Apakah Anda yakin ingin menghapus semua laporan dan nilai? Data yang sudah dihapus tidak bisa dikembalikan!")) {
+                db.ref('rekap').remove();
+                
+                globalMatchData.forEach(m => {
+                    db.ref('matches/' + m.partai + '/blueScore').remove();
+                    db.ref('matches/' + m.partai + '/redScore').remove();
+                    db.ref('matches/' + m.partai + '/blueStatus').remove();
+                    db.ref('matches/' + m.partai + '/redStatus').remove();
+                    db.ref('matches/' + m.partai + '/waktuBiru').remove();
+                    db.ref('matches/' + m.partai + '/waktuMerah').remove();
+                });
+
+                alert("Data Riwayat Laporan berhasil dihapus!");
+                closeHistoryModal();
+            }
+        }
+    </script>
+</body>
+</html>
